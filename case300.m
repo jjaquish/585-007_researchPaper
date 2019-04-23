@@ -327,7 +327,6 @@ mpc.bus = [
 %% generator data
 %	bus	Pg	Qg	Qmax	Qmin	Vg	mBase	status	Pmax	Pmin	Pc1	Pc2	Qc1min	Qc1max	Qc2min	Qc2max	ramp_agc	ramp_10	ramp_30	ramp_q	apf
 mpc.gen = [
-	8	0	0	10	-10	1.0153	100	1	100	0	0	0	0	0	0	0	0	0	0	0	0;
 	10	0	0	20	-20	1.0205	100	1	100	0	0	0	0	0	0	0	0	0	0	0	0;
 	20	0	0	20	-20	1.001	100	1	100	0	0	0	0	0	0	0	0	0	0	0	0;
 	63	0	0	25	-25	0.9583	100	1	100	0	0	0	0	0	0	0	0	0	0	0	0;
@@ -819,7 +818,6 @@ mpc.branch = [
 %	1	startup	shutdown	n	x1	y1	...	xn	yn
 %	2	startup	shutdown	n	c(n-1)	...	c0
 mpc.gencost = [
-	2	0	0	3	0.01	40	0;
 	2	0	0	3	0.01	40	0;
 	2	0	0	3	0.01	40	0;
 	2	0	0	3	0.01	40	0;
