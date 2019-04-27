@@ -9,9 +9,10 @@ G = digraph;
 G = addnode(G,size(mpc.bus,1));
 
 BR_STATUS = 11;
-
-for i = 1:size(mpc.branch,1)
+i = 1;
+while i <= size(mpc.bus,1)
     G = addedge(G,mpc.branch(i,1),mpc.branch(i,2));
+    i = i+1;
 end
 
 in_deg_cent = centrality(G, 'indegree');
@@ -23,63 +24,108 @@ betw_cent = centrality(G, 'betweenness');
 hub_cent = centrality(G, 'hubs');
 auth_cent = centrality(G, 'authorities');
 
-ac_successes = zeros(size(mpc.bus,1),8);
-dc_successes = zeros(size(mpc.bus,1),2);
+success = zeros(size(mpc.bus,1), 2);
+original_P = zeros(size(mpc.bus,1),1);
+original_Q = zeros(size(mpc.bus,1),1);
 
+for p = 1:size(mpc.bus,1)
+    original_P(p) = mpc.bus(p,3);
+    original_Q(p) = mpc.bus(p,4);
+end
 for j = 1:size(mpc.bus,1)
-    j
-    mpc = loadcase(casefile);
+    if(mpc.bus(j,2)~=3)
+        mpc = loadcase(casefile);
     
-    G = digraph;
-    G = addnode(G,size(mpc.bus,1));
+        G = digraph;
+        G = addnode(G,size(mpc.bus,1));
     
-    for i = 1:size(mpc.branch,1)
-        G = addedge(G,mpc.branch(i,1),mpc.branch(i,2));
-    end
+        for i = 1:size(mpc.branch,1)
+            G = addedge(G,mpc.branch(i,1),mpc.branch(i,2));
+        end
+        G = rmnode(G,j);
     
-    G = rmnode(G,j);
+        mpc.bus(j,2) = 4;
     
-    for k = 1:size(mpc.branch,1)
-        if ((mpc.branch(k, 1) == j) || (mpc.branch(k, 2) == j))
-            mpc.branch(k, BR_STATUS) = 0;
+        for k = 1:size(mpc.branch,1)
+            if ((mpc.branch(k, 1) == j) || (mpc.branch(k, 2) == j))
+                mpc.branch(k, BR_STATUS) = 0;
+            end
+        end
+    
+        opt = mpoption('VERBOSE', 0, 'OUT_ALL', 0);
+        [result_ofp, success_opf] = runopf(mpc,opt);
+        success(j,1) = success_opf;    
+        [result_pf, success_pf] = runpf(mpc, opt);
+        success(j,2) = success_pf;
+        %{
+        After testing, none of the AC_PF and AC_OPF methods were more effective
+        than the others. Newton's method will be chosen as the default and is
+        left uncommented above. AC_PF and AC_OPF were indistinguishable in
+        terms of convergences. Therefore AC_OPF will be used as the default.
+        AC_PF has been commented out above. 
+        
+        opt_2 = mpoption('PF_ALG', 2,'VERBOSE', 0, 'OUT_ALL', 0);
+        [result_ofp, success_opf] = runopf(mpc, opt_2);
+        [result_pf, success_pf] = runpf(mpc, opt_2);
+        success(j,3) = success_opf;
+        success(j,4) = success_pf;
+        opt_3 = mpoption('PF_ALG',3,'VERBOSE', 0, 'OUT_ALL', 0);
+        [result_ofp, success_opf] = runopf(mpc, opt_3);
+        [result_pf, success_pf] = runpf(mpc, opt_3);
+        success(j,5) = success_opf;
+        success(j,6) = success_pf;
+        opt_4 = mpoption('PF_ALG',4,'VERBOSE', 0, 'OUT_ALL', 0);
+        [result_ofp, success_opf] = runopf(mpc, opt_4);
+        [result_pf, success_pf] = runpf(mpc, opt_4);
+        success(j,7) = success_opf;
+        success(j,8) = success_pf;
+        %}
+           
+        %After testing, DC_PF always converged when AC_PF converged, but the opposite wasn't true.
+        opt_5 = mpoption('PF_DC', 1,'VERBOSE', 0, 'OUT_ALL', 0);
+        [result_ofp, success_opf] = runopf(mpc, opt_5);    
+        [result_pf, success_pf] = runpf(mpc, opt_5);
+        dc_success(j,1) = success_opf;    
+        dc_success(j,2) = success_pf;
+        
+        %{
+        while(~success(j,1) & success(j,1)~=2)
+            success(j,1) = 2;
+        
+            for m = 1:size(mpc.bus,1)
+                mpc.bus(m,3) = 0.95*mpc.bus(m,3);
+                mpc.bus(m,4) = 0.95*mpc.bus(m,4);
+                if mpc.bus(m,3) <= 0.2*original_P(m)
+                    for n = 1:size(mpc.branch,1)
+                        if ((mpc.branch(n, 1) == j) || (mpc.branch(n, 2) == j))
+                            success(j,1) = 2;
+                            mpc.branch(n, BR_STATUS) = 0;
+                            mpc.bus(n,2) = 4;
+                        end
+                    end
+                elseif mpc.bus(m,4) <= 0.2*original_Q(m)
+                    for o = 1:size(mpc.branch,1)
+                        if ((mpc.branch(o, 1) == j) || (mpc.branch(o, 2) == j))
+                            success(j,1) = 2;
+                            mpc.branch(o, BR_STATUS) = 0;
+                            mpc.bus(n,2) = 4;
+                        end
+                    end
+                end
+            end
+            [result_ofp, success_opf] = runopf(mpc);
+            success(j,1) = success_opf;
+        
+        end 
+        %}
+        success_1 = success;
+        if(~success(j,1))
+            for t = 1:10
+                mpc.bus = scale_load(t/10,mpc.bus);            
+            end
         end
     end
-    
-    opt_1 = mpoption('OUT_ALL', 0);
-    [result_ofp, success_opf] = runopf(mpc, opt_1);
-    [result_pf, success_pf] = runpf(mpc, opt_1);
-    ac_successes(j,1) = success_opf;
-    ac_successes(j,2) = success_pf;
-    opt_2 = mpoption('PF_ALG',2,'OUT_ALL',0);
-    [result_ofp, success_opf] = runopf(mpc,opt_2);
-    [result_pf, success_pf] = runpf(mpc,opt_2);
-    ac_successes(j,3) = success_opf;
-    ac_successes(j,4) = success_pf;
-    opt_3 = mpoption('PF_ALG',3,'OUT_ALL',0);
-    [result_ofp, success_opf] = runopf(mpc,opt_3);
-    [result_pf, success_pf] = runpf(mpc,opt_3);
-    ac_successes(j,5) = success_opf;
-    ac_successes(j,6) = success_pf;
-    opt_4 = mpoption('PF_ALG',4,'OUT_ALL',0);
-    [result_ofp, success_opf] = runopf(mpc,opt_4);
-    [result_pf, success_pf] = runpf(mpc,opt_4);
-    ac_successes(j,7) = success_opf;
-    ac_successes(j,8) = success_pf;
-    opt_5 = mpoption('PF_DC', 1,'OUT_ALL',0);
-    [result_ofp, success_opf] = runopf(mpc,opt_5);
-    [result_pf, success_pf] = runpf(mpc,opt_5);
-    dc_successes(j,1) = success_opf;
-    dc_successes(j,2) = success_pf;
 end
 
-for l = 1:size(success(1))
-    if(ac_successes(l,:))
-        ac_success = [ac_success, l];
-    end
-    if(dc_successes(1,:))
-        dc_success = [dc_success, 1];
-    end
-end
 
-ac_success;
-dc_success;
+success ~= success_1;
